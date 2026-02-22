@@ -1,0 +1,23 @@
+{
+    "name": "monte-carlo-india",
+    "version": "1.0.0",
+    "description": "Monte Carlo Option Pricing Simulator — India Edition (NSE/NIFTY 50)",
+    "private": true,
+    "type": "module",
+    "engines": {
+        "node": ">=18"
+    },
+    "scripts": {
+        "dev": "node server.js",
+        "start": "node server.js"
+    },
+    "keywords": [
+        "monte-carlo",
+        "options",
+        "NSE",
+        "NIFTY50",
+        "black-scholes",
+        "finance"
+    ],
+    "license": "MIT"
+}

@@ -1,0 +1,536 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Monte Carlo Option Pricer — India Edition</title>
+  <meta name="description"
+    content="Professional Monte Carlo & Black-Scholes option pricing simulator for Indian stocks (NSE/NIFTY 50). Live stock data, Greeks, sensitivity analysis." />
+  <link rel="icon"
+    href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>📈</text></svg>" />
+  <link rel="stylesheet" href="css/style.css" />
+  <!-- Chart.js 4 -->
+  <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+</head>
+
+<body>
+
+  <div class="app-shell">
+
+    <!-- ── Header ─────────────────────────────────────────────────────────── -->
+    <header class="header">
+      <div class="header-brand">
+        <div class="header-icon">📈</div>
+        <div>
+          <div class="header-title">Monte Carlo Option Pricer</div>
+          <div class="header-sub">Geometric Brownian Motion · Black-Scholes · Option Greeks · India Edition</div>
+          <div class="header-creator">Engineered by Jay C</div>
+        </div>
+      </div>
+      <div class="header-meta">
+        <span class="badge badge-nse">🇮🇳 NSE</span>
+        <span class="badge badge-live" id="liveBadge">● LIVE</span>
+      </div>
+    </header>
+
+    <!-- ── Main Grid ──────────────────────────────────────────────────────── -->
+    <div class="main-grid">
+
+      <!-- LEFT: Inputs ─────────────────────────────────────────────────────── -->
+      <div class="left-panel">
+
+        <!-- Stock Selector -->
+        <div class="card card-accent">
+          <div class="card-header">
+            <span class="card-title">🔍 Select Stock</span>
+            <span id="stockName" style="font-size:12px;color:var(--txt-muted)">Reliance Industries</span>
+          </div>
+          <div class="stock-search-wrap">
+            <span class="stock-search-icon">🔍</span>
+            <input id="stockSearchInput" type="text" class="stock-search-input" placeholder="Search NIFTY 50 stocks…"
+              autocomplete="off" />
+            <div id="stockDropdown" class="stock-dropdown" style="display:none;"></div>
+          </div>
+
+          <!-- Live Quote Row -->
+          <div class="stock-quote-row">
+            <div class="stock-quote-card">
+              <div class="sqc-label">Current Price</div>
+              <div class="sqc-value" id="priceValue">₹1,285.00</div>
+            </div>
+            <div class="stock-quote-card">
+              <div class="sqc-label">Historical Vol (1Y)</div>
+              <div class="sqc-value" id="volValue">26.00%</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Parameters -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">⚙️ Parameters</span>
+          </div>
+          <div class="param-group">
+
+            <!-- Stock Price -->
+            <div class="param-row">
+              <div class="param-label-row">
+                <span class="param-label">Stock Price (S₀)</span>
+                <input type="number" class="param-input" id="input_S0" step="0.05" value="1285" />
+              </div>
+              <div class="slider-stepper-wrap">
+                <button class="stepper-btn minus" data-id="slider_S0">−</button>
+                <input type="range" id="slider_S0" min="50" max="8000" step="1" value="1285" />
+                <button class="stepper-btn plus" data-id="slider_S0">+</button>
+              </div>
+            </div>
+
+            <!-- Strike Price -->
+            <div class="param-row">
+              <div class="param-label-row">
+                <span class="param-label">Strike Price (K)</span>
+                <input type="number" class="param-input" id="input_K" step="0.05" value="1290" />
+              </div>
+              <div class="slider-stepper-wrap">
+                <button class="stepper-btn minus" data-id="slider_K">−</button>
+                <input type="range" id="slider_K" min="50" max="8000" step="1" value="1290" />
+                <button class="stepper-btn plus" data-id="slider_K">+</button>
+              </div>
+            </div>
+
+            <!-- Volatility -->
+            <div class="param-row">
+              <div class="param-label-row">
+                <span class="param-label">
+                  Volatility (σ) — Annual
+                  <span class="info-tip"
+                    title="How much the stock typically swings per year. Higher σ = much more expensive option. Auto-filled from 1yr historical data when you pick a stock.">ⓘ</span>
+                </span>
+                <input type="number" class="param-input" id="input_sigma" step="0.01" value="26.00" />
+              </div>
+              <!-- Regime bar -->
+              <div class="vol-regime-bar">
+                <div class="vol-zone calm">Calm<br><span>10–20%</span></div>
+                <div class="vol-zone normal">Normal<br><span>20–35%</span></div>
+                <div class="vol-zone high">High<br><span>35–55%</span></div>
+                <div class="vol-zone extreme">Extreme<br><span>55%+</span></div>
+                <div class="vol-regime-cursor" id="volCursor"></div>
+              </div>
+              <div class="slider-stepper-wrap">
+                <button class="stepper-btn minus" data-id="slider_sigma">−</button>
+                <input type="range" id="slider_sigma" min="0.05" max="1.0" step="0.005" value="0.26" />
+                <button class="stepper-btn plus" data-id="slider_sigma">+</button>
+              </div>
+              <!-- Presets -->
+              <div class="rate-presets">
+                <button class="rate-preset-btn" data-sigma="0.12" title="Large-cap defensives — ITC, HUL, Nestlé">🟢 Low
+                  12%</button>
+                <button class="rate-preset-btn active" data-sigma="0.26"
+                  title="Typical blue-chip — RELIANCE, INFY, TCS">🟡 Mid 26%</button>
+                <button class="rate-preset-btn" data-sigma="0.40" title="Adani stocks, mid-caps, news-driven stocks">🟠
+                  High 40%</button>
+                <button class="rate-preset-btn" data-sigma="0.65" title="Small-caps, penny stocks, crisis conditions">🔴
+                  Extreme 65%</button>
+                <button class="rate-preset-btn" data-sigma="0.16" title="India VIX — current market fear gauge">📊 VIX
+                  16%</button>
+              </div>
+              <!-- Info box -->
+              <div class="rate-info-box">
+                <div class="rate-info-row">
+                  <span class="rate-info-label">What it is</span>
+                  <span class="rate-info-val">Std deviation of daily returns × √245 (NSE days)</span>
+                </div>
+                <div class="rate-info-row">
+                  <span class="rate-info-label">Where to get</span>
+                  <span class="rate-info-val">Auto-filled ↑ · NSE F&O · Sensibull · Moneycontrol</span>
+                </div>
+                <div class="rate-info-row">
+                  <span class="rate-info-label">Effect on price</span>
+                  <span class="rate-info-val emerald">↑ Higher σ → both Call & Put get more expensive</span>
+                </div>
+                <div class="rate-info-row">
+                  <span class="rate-info-label">Impact</span>
+                  <span class="rate-info-val rose">Biggest driver of option price — Vega measures this</span>
+                </div>
+              </div>
+            </div>
+
+            <!-- Risk-Free Rate -->
+            <div class="param-row">
+              <div class="param-label-row">
+                <span class="param-label">
+                  Risk-Free Rate (r)
+                  <span class="info-tip"
+                    title="The RBI Repo Rate is the standard for Indian options. Higher r → calls go up, puts go down.">ⓘ</span>
+                </span>
+                <input type="number" class="param-input" id="input_r" step="0.01" value="6.50" />
+              </div>
+              <div class="slider-stepper-wrap">
+                <button class="stepper-btn minus" data-id="slider_r">−</button>
+                <input type="range" id="slider_r" min="0.01" max="0.25" step="0.001" value="0.065" />
+                <button class="stepper-btn plus" data-id="slider_r">+</button>
+              </div>
+              <!-- Preset buttons -->
+              <div class="rate-presets">
+                <button class="rate-preset-btn active" data-rate="0.065"
+                  title="RBI Repo Rate — gold standard for Indian options">🏦 RBI Repo 6.50%</button>
+                <button class="rate-preset-btn" data-rate="0.067"
+                  title="91-day Treasury Bill yield — short-term G-Sec">📄 T-Bill 6.70%</button>
+                <button class="rate-preset-btn" data-rate="0.068"
+                  title="10-year Government Security yield — long-term">📊 G-Sec 6.80%</button>
+                <button class="rate-preset-btn" data-rate="0.0425" title="US Fed Funds Rate — for comparison only">🌐 US
+                  Fed 4.25%</button>
+              </div>
+              <!-- Info box -->
+              <div class="rate-info-box">
+                <div class="rate-info-row">
+                  <span class="rate-info-label">What it is</span>
+                  <span class="rate-info-val">Return from a "guaranteed" investment (RBI deposit)</span>
+                </div>
+                <div class="rate-info-row">
+                  <span class="rate-info-label">Effect on CALL</span>
+                  <span class="rate-info-val emerald">↑ Higher r → higher call price</span>
+                </div>
+                <div class="rate-info-row">
+                  <span class="rate-info-label">Effect on PUT</span>
+                  <span class="rate-info-val rose">↑ Higher r → lower put price</span>
+                </div>
+                <div class="rate-info-row">
+                  <span class="rate-info-label">Impact</span>
+                  <span class="rate-info-val muted">Small vs. volatility — Rho measures this exactly</span>
+                </div>
+              </div>
+            </div>
+
+            <div class="param-row">
+              <div class="param-label-row">
+                <span class="param-label">Expiry (Days)</span>
+                <input type="number" class="param-input" id="input_T" step="1" value="30" />
+              </div>
+              <div class="slider-stepper-wrap">
+                <button class="stepper-btn minus" data-id="slider_T">−</button>
+                <input type="range" id="slider_T" min="1" max="730" step="1" value="30" />
+                <button class="stepper-btn plus" data-id="slider_T">+</button>
+              </div>
+            </div>
+
+            <!-- Year Basis Toggle -->
+            <div class="param-row">
+              <div class="param-label-row">
+                <span class="param-label">Year Basis Convention</span>
+                <span class="param-value" id="display_yearBasis">250 days</span>
+              </div>
+              <div class="basis-toggle-wrap">
+                <button class="basis-btn" data-basis="365">Std 365</button>
+                <button class="basis-btn active" data-basis="250">NSE 250</button>
+              </div>
+            </div>
+
+            <!-- Paths -->
+            <div class="param-row">
+              <div class="param-label-row">
+                <span class="param-label">Simulation Paths</span>
+                <input type="number" class="param-input" id="input_nPaths" step="500" value="10000" />
+              </div>
+              <div class="slider-stepper-wrap">
+                <button class="stepper-btn minus" data-id="slider_nPaths">−</button>
+                <input type="range" id="slider_nPaths" min="1000" max="50000" step="500" value="10000" />
+                <button class="stepper-btn plus" data-id="slider_nPaths">+</button>
+              </div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Option Type Toggle -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📋 Option Type</span>
+          </div>
+          <div class="toggle-group">
+            <button class="toggle-btn active-call" id="btn_call">▲ CALL</button>
+            <button class="toggle-btn" id="btn_put">▼ PUT</button>
+          </div>
+          <div style="margin-top:12px;font-size:11px;color:var(--txt-muted);line-height:1.6">
+            <strong style="color:var(--emerald)">CALL</strong> — right to <em>buy</em> at strike. Profitable if stock
+            rises above K.<br>
+            <strong style="color:var(--rose)">PUT</strong> — right to <em>sell</em> at strike. Profitable if stock falls
+            below K.
+          </div>
+        </div>
+
+        <!-- Simulate Button -->
+        <button class="simulate-btn" id="simulateBtn">▶ Simulate</button>
+
+        <!-- Info Note -->
+        <div style="font-size:11px;color:var(--txt-muted);text-align:center;line-height:1.6">
+          Uses <strong style="color:var(--txt-secondary)">245</strong> NSE trading days/year ·
+          RBI Repo Rate default · European options only
+        </div>
+
+      </div>
+
+      <!-- RIGHT: Results ───────────────────────────────────────────────────── -->
+      <div class="right-panel">
+
+        <!-- Price Results -->
+        <div class="card card-accent">
+          <div class="card-header">
+            <span class="card-title">💰 Option Price</span>
+            <span style="font-size:11px;color:var(--txt-muted)">European Style</span>
+          </div>
+
+          <div class="price-results-grid">
+            <!-- MC Card -->
+            <div class="price-method-card mc">
+              <div class="pm-label" id="mc_label">Monte Carlo — CALL</div>
+              <div class="pm-price call" id="mc_price">—</div>
+              <div class="pm-sub" id="mc_ci">Run simulation to see results</div>
+            </div>
+            <!-- BS Card -->
+            <div class="price-method-card bs">
+              <div class="pm-label" id="bs_label">Black-Scholes — CALL</div>
+              <div class="pm-price call" id="bs_price">—</div>
+              <div class="pm-sub">Analytical (closed-form)</div>
+            </div>
+          </div>
+
+          <div class="difference-row">
+            <span class="diff-label" id="diff_label">Waiting for simulation…</span>
+            <span class="diff-badge accurate" id="price_diff">—</span>
+          </div>
+
+        </div>
+
+        <!-- Simulation Chart -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">📊 GBM Price Paths</span>
+            <span style="font-size:11px;color:var(--txt-muted)">60 sample paths shown</span>
+          </div>
+          <div class="chart-wrap">
+            <canvas id="simCanvas" class="chart-canvas"></canvas>
+            <div class="chart-overlay">
+              <div class="chart-stat" id="simStat">—</div>
+            </div>
+          </div>
+        </div>
+
+        <!-- Greeks Panel -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🔢 Option Greeks</span>
+            <span style="font-size:11px;color:var(--txt-muted)">Hover for plain-English explanation</span>
+          </div>
+          <div class="greeks-grid">
+
+            <div class="greek-card" id="greek_delta">
+              <div class="greek-symbol">Δ</div>
+              <div class="greek-name">Delta</div>
+              <div class="greek-value">—</div>
+              <div class="greek-bar">
+                <div class="greek-bar-fill" style="width:0%"></div>
+              </div>
+              <div class="greek-tooltip">Run a simulation to see Greeks.</div>
+            </div>
+
+            <div class="greek-card" id="greek_gamma">
+              <div class="greek-symbol">Γ</div>
+              <div class="greek-name">Gamma</div>
+              <div class="greek-value">—</div>
+              <div class="greek-bar">
+                <div class="greek-bar-fill" style="width:0%"></div>
+              </div>
+              <div class="greek-tooltip">Rate of change of Delta.</div>
+            </div>
+
+            <div class="greek-card" id="greek_vega">
+              <div class="greek-symbol">V</div>
+              <div class="greek-name">Vega</div>
+              <div class="greek-value">—</div>
+              <div class="greek-bar">
+                <div class="greek-bar-fill" style="width:0%"></div>
+              </div>
+              <div class="greek-tooltip">Sensitivity to volatility.</div>
+            </div>
+
+            <div class="greek-card" id="greek_theta">
+              <div class="greek-symbol">Θ</div>
+              <div class="greek-name">Theta</div>
+              <div class="greek-value">—</div>
+              <div class="greek-bar">
+                <div class="greek-bar-fill" style="width:0%"></div>
+              </div>
+              <div class="greek-tooltip">Daily time decay of option value.</div>
+            </div>
+
+            <div class="greek-card" id="greek_rho">
+              <div class="greek-symbol">ρ</div>
+              <div class="greek-name">Rho</div>
+              <div class="greek-value">—</div>
+              <div class="greek-bar">
+                <div class="greek-bar-fill" style="width:0%"></div>
+              </div>
+              <div class="greek-tooltip">Sensitivity to RBI repo rate.</div>
+            </div>
+
+          </div>
+        </div>
+
+        <!-- Two-column: Convergence + Payoff -->
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:20px;">
+
+          <!-- Convergence Chart -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">📉 MC Convergence</span>
+            </div>
+            <div class="sub-chart-wrap">
+              <canvas id="convergenceCanvas"></canvas>
+            </div>
+          </div>
+
+          <!-- Payoff Diagram -->
+          <div class="card">
+            <div class="card-header">
+              <span class="card-title">📈 Payoff at Expiry</span>
+            </div>
+            <div class="sub-chart-wrap">
+              <canvas id="payoffCanvas"></canvas>
+            </div>
+          </div>
+
+        </div>
+
+        <!-- Sensitivity Chart -->
+        <div class="card">
+          <div class="card-header">
+            <span class="card-title">🔬 Sensitivity Analysis</span>
+          </div>
+          <div class="tab-bar">
+            <button class="tab-btn sens-tab active" data-tab="vol">Price vs Volatility</button>
+            <button class="tab-btn sens-tab" data-tab="strike">Price vs Strike</button>
+          </div>
+          <div class="sub-chart-wrap" style="height:340px">
+            <canvas id="sensitivityCanvas"></canvas>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ── Footer ─────────────────────────────────────────────────────────── -->
+    <footer class="footer">
+      <div>
+        Monte Carlo Option Pricer · India Edition ·
+        <span style="color:var(--indigo-bright)">NSE/NIFTY 50</span>
+      </div>
+      <div class="footer-links">
+        <span style="color:var(--txt-muted)">Educational purposes only · Not financial advice</span>
+      </div>
+    </footer>
+
+  </div><!-- /.app-shell -->
+
+  <!-- ── Explainer Modal ──────────────────────────────────────────────────── -->
+  <div id="explainerModal" class="modal-backdrop">
+    <div class="modal">
+      <div class="modal-header">
+        <div class="modal-title">💡 What does this mean?</div>
+        <button class="modal-close" id="modalClose">✕</button>
+      </div>
+
+      <div class="modal-section">
+        <h4>🏠 The Flat Booking Analogy</h4>
+        <p>
+          Imagine you want to book a flat for <strong>₹50 lakh</strong>. You pay a
+          <strong>₹1 lakh booking amount</strong> today to lock in that price for the next
+          6 months. If the flat price rises to ₹70 lakh, you still buy at ₹50 lakh.
+          If it falls, you walk away —&nbsp;only losing ₹1 lakh.
+          <br><br>
+          That <strong>₹1 lakh booking amount</strong> is the <em>option premium</em>.
+          This app calculates exactly that — for Indian stocks.
+        </p>
+      </div>
+
+      <div class="modal-section">
+        <h4>📋 What each parameter means</h4>
+        <table class="modal-table">
+          <thead>
+            <tr>
+              <th>Symbol</th>
+              <th>Meaning</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr>
+              <td>S₀</td>
+              <td>Current stock price (e.g. RELIANCE at ₹1,285 today)</td>
+            </tr>
+            <tr>
+              <td>K</td>
+              <td>Strike price — the price you want to lock in</td>
+            </tr>
+            <tr>
+              <td>T</td>
+              <td>How many years until the option expires (0.25 = 3 months)</td>
+            </tr>
+            <tr>
+              <td>σ</td>
+              <td>Volatility — how wildly the stock swings. Higher = pricier option</td>
+            </tr>
+            <tr>
+              <td>r</td>
+              <td>RBI Repo Rate = "safe" interest you'd earn by not taking risk</td>
+            </tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="modal-section">
+        <h4>🎲 How Monte Carlo works</h4>
+        <p>
+          The computer rolls a virtual dice <strong>10,000 times</strong>, each time
+          simulating a different possible future for the stock. Each coloured line on the
+          chart is one possible future. The app then averages all outcomes to find the
+          fair price. The more dice rolls (paths), the more accurate the answer.
+        </p>
+      </div>
+
+      <div class="modal-section">
+        <h4>🧮 Black-Scholes</h4>
+        <p>
+          A Nobel Prize-winning formula (1973) that solves the same problem in
+          milliseconds using pure maths. The Monte Carlo result should be very close to
+          this — you can see the difference in the price card above.
+        </p>
+      </div>
+
+      <div class="modal-section">
+        <h4>Δ Γ V Θ ρ — The Greeks</h4>
+        <p>
+          These measure how sensitive your option is to different factors.
+          <strong>Delta</strong> = how much the option moves if the stock moves ₹1.
+          <strong>Theta</strong> = how much value the option loses every day (time decay).
+          <strong>Vega</strong> = sensitivity to market panic (India VIX).
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ── Help FAB ──────────────────────────────────────────────────────────── -->
+  <button class="help-fab" id="helpFab" title="Explain this app">?</button>
+
+  <!-- ── Toast ─────────────────────────────────────────────────────────────── -->
+  <div id="toast" class="toast"></div>
+
+  <!-- ── Scripts (order matters) ──────────────────────────────────────────── -->
+  <script src="js/stocks.js"></script>
+  <script src="js/engine.js"></script>
+  <script src="js/charts.js"></script>
+  <script src="js/app.js"></script>
+
+</body>
+
+</html>
