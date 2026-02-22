@@ -1,4 +1,3 @@
-<<<<<<< HEAD
 # 📈 Monte Carlo Option Pricer — India Edition
 
 <div align="center">
@@ -99,7 +98,3 @@ $$P = K e^{-rt} N(-d_2) - S_0 N(-d_1)$$
 <div align="center">
   <sub>Built with ❤️ for Indian Traders.</sub>
 </div>
-=======
-# Monte-Carlo-Option-Simulator
-Shows Stock Options details using Monte Carlo simulation
->>>>>>> origin/main
