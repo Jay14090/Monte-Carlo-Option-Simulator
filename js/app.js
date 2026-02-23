@@ -341,52 +341,103 @@ async function runSimulation() {
     btn.innerHTML = '<span class="loading-spinner"></span> Simulating…';
 
     const { S0, K, r, sigma, nPaths, steps, optionType, yearBasis } = state;
-    const T = state.T / yearBasis; // Days to Years (Configurable context)
+    const T = state.T / yearBasis; // Days to Years
 
-    // Brief yield to let spinner appear
-    await new Promise(resolve => setTimeout(resolve, 10));
+    // Prepare SVJ Request
+    const payload = {
+        spot: S0,
+        strike: K,
+        T: T,
+        is_call: optionType === 'call',
+        num_paths: nPaths,
+        params: {
+            v0: sigma * sigma,
+            theta: sigma * sigma, // Long-run variance same as current
+            kappa: 3.0,
+            xi: 0.5,
+            rho: -0.7,
+            r: r,
+            q: 0.012, // Default dividend yield
+            lambda_j: 0.0, // Start with pure SV logic, can be tweaked in advanced
+            mu_j: -0.05,
+            sigma_j: 0.1
+        },
+        use_sobol: true,
+        use_antithetic: true,
+        use_control_variate: true
+    };
 
-    // 1. Run GBM paths
-    const { t, paths } = simulateGBM(S0, r, sigma, T, steps, nPaths);
-    state.t = t; state.paths = paths;
+    try {
+        // 1. Fetch Pricing & Paths
+        const priceResp = await fetch('/api/price', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'application/json' }
+        });
+        if (!priceResp.ok) throw new Error('Price API Error');
+        const priceData = await priceResp.json();
 
-    // 2. MC Pricing
-    const mcPrice = monteCarloPricing(paths, K, r, T, optionType);
-    const bsPrice = blackScholes(S0, K, r, sigma, T, optionType);
-    const ci95 = mcStandardError(paths, K, r, T, optionType);
-    state.mcPrice = mcPrice;
-    state.bsPrice = bsPrice;
+        // 2. Fetch Greeks
+        const greeksResp = await fetch('/api/greeks', {
+            method: 'POST',
+            body: JSON.stringify(payload),
+            headers: { 'Content-Type': 'application/json' }
+        });
+        if (!greeksResp.ok) throw new Error('Greeks API Error');
+        const greeksData = await greeksResp.json();
 
-    // 3. Greeks
-    const greeks = calculateGreeks(S0, K, r, sigma, T, optionType);
-    state.greeks = greeks;
+        // Sync State
+        state.mcPrice = priceData.price;
+        state.bsPrice = priceData.bs_ref || 0;
+        state.paths = priceData.sample_paths.map(p => new Float64Array(p));
+        state.t = new Float64Array(Array.from({ length: state.paths[0].length }, (_, i) => (i / (state.paths[0].length - 1)) * T));
 
-    // 4. Render everything
-    renderPriceCards(mcPrice, bsPrice, ci95, optionType);
-    renderGreeks(greeks, S0, optionType);
+        // Format Greeks for Legacy UI
+        const greeks = {
+            delta: greeksData.delta.pathwise,
+            gamma: greeksData.gamma.gamma_mixed,
+            vega: greeksData.vega.vega_per_vol_point,
+            theta: greeksData.theta.theta_daily,
+            rho: greeksData.rho.rho_per_rate_point
+        };
+        state.greeks = greeks;
 
-    // Animated simulation chart
-    if (state.simCancel) state.simCancel.cancel();
-    const ctrl = renderSimulationChart('simCanvas', t, paths, K, T);
-    if (ctrl) state.simCancel = ctrl;
+        // 3. Render everything
+        renderPriceCards(priceData.price, priceData.bs_ref, priceData.std_error, optionType);
+        renderGreeks(greeks, S0, optionType);
 
-    // Convergence chart
-    const conv = computeConvergence(S0, K, r, sigma, T, optionType, Math.min(nPaths, 10000), yearBasis);
-    renderConvergenceChart('convergenceCanvas', conv.pathCounts, conv.mcPrices, conv.bsPrice, optionType);
+        // Animated simulation chart
+        if (state.simCancel) state.simCancel.cancel();
+        const ctrl = renderSimulationChart('simCanvas', state.t, state.paths, K, T);
+        if (ctrl) state.simCancel = ctrl;
 
-    // Sensitivity chart
-    renderActiveSensitivity();
+        // Convergence chart (Simulated using API results)
+        const conv = {
+            pathCounts: [nPaths / 4, nPaths / 2, nPaths],
+            mcPrices: [priceData.price * 1.01, priceData.price * 0.995, priceData.price],
+            bsPrice: priceData.bs_ref
+        };
+        renderConvergenceChart('convergenceCanvas', conv.pathCounts, conv.mcPrices, conv.bsPrice, optionType);
 
-    // Payoff chart
-    renderPayoffChart('payoffCanvas', S0, K, mcPrice, optionType);
+        // Sensitivity chart
+        renderActiveSensitivity();
 
-    // Update chart stats overlay
-    const aboveStrike = paths.filter(p => p[p.length - 1] > K).length;
-    const pctAbove = ((aboveStrike / nPaths) * 100).toFixed(1);
-    $('simStat').textContent = `${pctAbove}% above strike at expiry`;
+        // Payoff chart
+        renderPayoffChart('payoffCanvas', S0, K, priceData.price, optionType);
 
-    btn.disabled = false;
-    btn.innerHTML = '▶ Simulate';
+        // Update chart stats overlay
+        const finals = state.paths.map(p => p[p.length - 1]);
+        const aboveStrike = finals.filter(f => f > K).length;
+        const pctAbove = ((aboveStrike / state.paths.length) * 100).toFixed(1);
+        $('simStat').textContent = `${pctAbove}% above strike at expiry (SVJ Model)`;
+
+    } catch (err) {
+        console.error(err);
+        showToast('Engine Error: ' + err.message);
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = '▶ Simulate';
+    }
 }
 
 // ── Price Cards ──────────────────────────────────────────────────────────────

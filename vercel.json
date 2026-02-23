@@ -40,5 +40,15 @@
         }
       ]
     }
+  ],
+  "rewrites": [
+    {
+      "source": "/api/(.*)",
+      "destination": "api/index.py"
+    },
+    {
+      "source": "/advanced",
+      "destination": "/dashboard.html"
+    }
   ]
 }
